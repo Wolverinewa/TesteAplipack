@@ -10,8 +10,22 @@ Begin VB.Form Form1
    ScaleHeight     =   4785
    ScaleWidth      =   6555
    StartUpPosition =   3  'Windows Default
-   Begin MSWinsockLib.Winsock Winsock1 
-      Left            =   5760
+   Begin MSWinsockLib.Winsock WinsockScanner2 
+      Left            =   3720
+      Top             =   0
+      _ExtentX        =   741
+      _ExtentY        =   741
+      _Version        =   393216
+   End
+   Begin MSWinsockLib.Winsock WinSockBalanca 
+      Left            =   4680
+      Top             =   0
+      _ExtentX        =   741
+      _ExtentY        =   741
+      _Version        =   393216
+   End
+   Begin MSWinsockLib.Winsock WinsockScanner1 
+      Left            =   5520
       Top             =   120
       _ExtentX        =   741
       _ExtentY        =   741
@@ -112,7 +126,6 @@ Private Sub Command2_Click()
         Socket(iSockets).Close
     End If
     If Trim(Text3.Text) <> "" And IsNumeric(Text3.Text) Then
-        'Socket(0).LocalPort = 1007
         Socket(0).LocalPort = Trim(Text3.Text)
         sServerMsg = "Listening to port: " & Socket(0).LocalPort
         List1.AddItem (sServerMsg)
@@ -134,35 +147,117 @@ Private Sub Form_Load()
 '    Label1.Caption = Socket(iSockets).State
 End Sub
 
-Private Sub socket_ConnectionRequest(Index As Integer, ByVal requestID As Long)
-    sServerMsg = "Connection request id " & requestID & " from " & Socket(Index).RemoteHostIP
-    'If Index = 0 Then
-        List1.AddItem (sServerMsg)
-        sRequestID = requestID
-        iSockets = iSockets + 1
-        Load Socket(iSockets)
-        Socket(iSockets).LocalPort = 1007
-        Socket(iSockets).Accept requestID
-'        Label2.Caption = Socket(iSockets).State
-'        Label1.Caption = Socket(0).State
-'        Label3.Caption = iSockets
-        DoEvents
-    'End If
+'=======================================================================
+'Balança
+Private Sub WinSockBalanca_ConnectionRequest(ByVal requestID As Long)
+    sServerMsg = "Connection request id " & requestID & " from " & WinSockBalanca.RemoteHostIP
+        
+    List1.AddItem (sServerMsg)
+    sRequestID = requestID
+    iSockets = iSockets + 1
+    Load Socket(iSockets)
+    Socket(iSockets).LocalPort = 1007
+    Socket(iSockets).Accept requestID
+    DoEvents
+
 End Sub
 
-Private Sub socket_DataArrival(Index As Integer, ByVal bytesTotal As Long)
+Private Sub WinSockBalanca_DataArrival(ByVal bytesTotal As Long)
+Dim sItemData As String
+    
+    ' get data from client
+    WinSockBalanca.GetData sItemData, vbString
+    sServerMsg = sItemData & WinSockBalanca.RemoteHostIP & "(" & sRequestID & ")"
+    List1.AddItem (sServerMsg)
+   
+    DadosEti.setPesoBalanca (sItemData)
+    If Not (DadosEti.Consiste_Pesos()) Then
+        DadosEti.setValido (False)
+        If DadosEti.ImprimeEtiquetaERRO() Then
+            'Processa a aplicação da etiqueta com observação de ERRO na caixa
+        Else
+            'Emite aviso de falha
+        End If
+    Else
+        DadosEti.setValido (True)
+        If DadosEti.ImprimeEtiqueta() Then
+            'Processa a aplicação da etiqueta na caixa
+        Else
+            'Emite aviso de falha
+        End If
+    End If
+   
+
+End Sub
+'=======================================================================
+
+
+
+'=======================================================================
+'Primeiro Leitor de código de barras - Pré-Etiqueta
+Private Sub WinsockScanner1_ConnectionRequest(ByVal requestID As Long)
+    sServerMsg = "Connection request id " & requestID & " from " & WinsockScanner1.RemoteHostIP
+        
+    List1.AddItem (sServerMsg)
+    sRequestID = requestID
+    iSockets = iSockets + 1
+    Load Socket(iSockets)
+    Socket(iSockets).LocalPort = 1007
+    Socket(iSockets).Accept requestID
+    DoEvents
+End Sub
+
+Private Sub WinsockScanner1_DataArrival(ByVal bytesTotal As Long)
 Dim sItemData As String
 Dim strOutData As String
         
     ' get data from client
-    Socket(Index).GetData sItemData, vbString
-    sServerMsg = "Received: " & sItemData & " from " & Socket(Index).RemoteHostIP & "(" & sRequestID & ")"
+    WinsockScanner1.GetData sItemData, vbString
+    sServerMsg = sItemData & WinsockScanner1.RemoteHostIP & "(" & sRequestID & ")"
     List1.AddItem (sServerMsg)
+    
+    Set DadosEti = New DadosEtiqueta
+    If Not (DadosEti.Consiste_Dados(sItemData)) Then
+        DadosEti.setValido (False)
+    Else
+        DadosEti.setValido (False)
+    End If
    
-    'send data to client
-    sServerMsg = "Sending: " & strOutData & " to " & Socket(Index).RemoteHostIP
-    List1.AddItem (sServerMsg)
-    'strOutData = "Recebido a mensagem: " sServerMsg
-    Socket(Index).SendData sServerMsg
 End Sub
+'=======================================================================
+
+
+
+'=======================================================================
+'Segundo Leitor de código de barras - Etiqueta de produção
+Private Sub WinsockScanner2_ConnectionRequest(ByVal requestID As Long)
+    sServerMsg = "Connection request id " & requestID & " from " & WinsockScanner2.RemoteHostIP
+        
+    List1.AddItem (sServerMsg)
+    sRequestID = requestID
+    iSockets = iSockets + 1
+    Load Socket(iSockets)
+    Socket(iSockets).LocalPort = 1007
+    Socket(iSockets).Accept requestID
+    DoEvents
+End Sub
+
+Private Sub WinsockScanner2_DataArrival(ByVal bytesTotal As Long)
+Dim sItemData As String
+Dim strOutData As String
+        
+ ' get data from client
+   WinsockScanner2.GetData sItemData, vbString
+   sServerMsg = sItemData & WinsockScanner2.RemoteHostIP & "(" & sRequestID & ")"
+   List1.AddItem (sServerMsg)
+
+    DadosEti.setCodProdutoFinal (sItemData)
+    If Not (DadosEti.Consiste_Pesos()) Then
+        DadosEti.setValido (False)
+    Else
+        DadosEti.setValido (False)
+    End If
+
+End Sub
+'=======================================================================
 
